@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Water Quality EO — Day 2 — April 17, 2025</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+  :root {
+    --bg: #050d1a;
+    --panel: rgba(8,20,40,0.92);
+    --border: rgba(0,200,255,0.15);
+    --accent: #00c8ff;
+    --accent2: #7ee8fa;
+    --text: #e8f4fd;
+    --muted: #7fa8c4;
+    --good: #00B4D8;
+    --moderate: #FFB703;
+    --poor: #E63946;
+    --glass: rgba(5,20,45,0.88);
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background: var(--bg); font-family:'Space Grotesk',sans-serif; color:var(--text); height:100vh; overflow:hidden; }
+
+  #map { width:100%; height:100vh; }
+
+  /* ── HEADER STRIP ─────────────────────────────── */
+  #header {
+    position:fixed; top:0; left:0; right:0; z-index:1000;
+    background: linear-gradient(90deg, rgba(0,15,35,0.97) 0%, rgba(0,40,80,0.92) 50%, rgba(0,15,35,0.97) 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 20px;
+    display:flex; align-items:center; justify-content:space-between;
+    backdrop-filter: blur(12px);
+  }
+  #header .title-block h1 {
+    font-size:13px; letter-spacing:3px; text-transform:uppercase;
+    color: var(--accent); font-weight:600;
+  }
+  #header .title-block h2 {
+    font-size:17px; font-weight:700; color:white; margin-top:2px;
+  }
+  #header .day-badge {
+    background: linear-gradient(135deg, #003566, #001d3d);
+    border:1px solid var(--accent);
+    border-radius:8px; padding:6px 16px; text-align:center;
+    box-shadow: 0 0 20px rgba(0,200,255,0.2);
+  }
+  #header .day-badge .day-num { font-size:22px; font-weight:700; color:var(--accent); }
+  #header .day-badge .day-date { font-size:11px; color:var(--muted); letter-spacing:1px; }
+
+  /* ── WEATHER PANEL ──────────────────────────────── */
+  #weather-panel {
+    position:fixed; top:80px; right:16px; z-index:1000;
+    width:230px;
+    background: var(--glass);
+    border:1px solid var(--border);
+    border-radius:14px; padding:14px;
+    backdrop-filter:blur(16px);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05);
+  }
+  #weather-panel .wp-header {
+    display:flex; align-items:center; gap:10px; margin-bottom:10px;
+    border-bottom:1px solid var(--border); padding-bottom:10px;
+  }
+  #weather-panel .wp-icon { font-size:36px; line-height:1; }
+  #weather-panel .wp-cond { font-size:13px; font-weight:600; color:white; }
+  #weather-panel .wp-temp { font-size:24px; font-weight:700; color:var(--accent); }
+  .wp-row { display:flex; justify-content:space-between; align-items:center; padding:3px 0; }
+  .wp-row span:first-child { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; }
+  .wp-row span:last-child { font-size:11px; font-weight:600; color:var(--text); font-family:'JetBrains Mono',monospace; }
+  .wp-note { font-size:10px; color:var(--muted); margin-top:10px; line-height:1.5;
+    border-top:1px solid var(--border); padding-top:8px; font-style:italic; }
+  .wp-section-title { font-size:9px; letter-spacing:2px; text-transform:uppercase; color:var(--accent); font-weight:600; margin-bottom:6px; }
+
+  /* ── WATER BODY PANEL ────────────────────────────── */
+  #waterbody-panel {
+    position:fixed; top:80px; left:16px; z-index:1000;
+    width:220px;
+    background: var(--glass);
+    border:1px solid var(--border);
+    border-radius:14px; padding:14px;
+    backdrop-filter:blur(16px);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  }
+  .wb-type { font-size:13px; font-weight:700; color:var(--accent2); margin-bottom:8px; line-height:1.3; }
+  .wb-row { display:flex; flex-direction:column; padding:4px 0; border-bottom:1px solid rgba(255,255,255,0.04); }
+  .wb-row .wb-label { font-size:9px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); }
+  .wb-row .wb-val { font-size:11px; color:var(--text); margin-top:2px; line-height:1.4; }
+  .wb-eco { margin-top:8px; padding:8px; background:rgba(255,183,3,0.08); border:1px solid rgba(255,183,3,0.2);
+    border-radius:8px; font-size:10px; color:#FFB703; line-height:1.5; }
+
+  /* ── LEGEND ─────────────────────────────────────── */
+  #legend {
+    position:fixed; bottom:20px; left:16px; z-index:1000;
+    background: var(--glass);
+    border:1px solid var(--border);
+    border-radius:12px; padding:14px 16px;
+    backdrop-filter:blur(16px);
+    min-width:200px;
+  }
+  .legend-title { font-size:9px; letter-spacing:2px; text-transform:uppercase; color:var(--accent); font-weight:600; margin-bottom:10px; }
+  .legend-row { display:flex; align-items:center; gap:10px; padding:4px 0; }
+  .legend-dot { width:14px; height:14px; border-radius:50%; flex-shrink:0; border:2px solid rgba(255,255,255,0.3); }
+  .legend-label { font-size:11px; color:var(--text); }
+  .legend-sub { font-size:9px; color:var(--muted); margin-top:2px; }
+  .choropleth-bar {
+    margin-top:12px; border-top:1px solid var(--border); padding-top:10px;
+  }
+  .cbar-gradient {
+    height:10px; border-radius:5px;
+    background: linear-gradient(to right, #00C88C, #FFB703, #E63946);
+    margin: 6px 0;
+  }
+  .cbar-labels { display:flex; justify-content:space-between; font-size:9px; color:var(--muted); font-family:'JetBrains Mono',monospace; }
+
+  /* ── STATS BAR ───────────────────────────────────── */
+  #stats-bar {
+    position:fixed; bottom:20px; right:16px; z-index:1000;
+    background: var(--glass);
+    border:1px solid var(--border);
+    border-radius:12px; padding:12px 16px;
+    backdrop-filter:blur(16px);
+    display:flex; gap:20px;
+  }
+  .stat-item { text-align:center; }
+  .stat-val { font-size:18px; font-weight:700; font-family:'JetBrains Mono',monospace; }
+  .stat-label { font-size:9px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); margin-top:2px; }
+
+  /* ── POPUP ──────────────────────────────────────── */
+  .custom-popup .leaflet-popup-content-wrapper {
+    background: rgba(4,16,36,0.97) !important;
+    border: 1px solid rgba(0,200,255,0.3) !important;
+    border-radius: 14px !important;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.8), 0 0 30px rgba(0,200,255,0.15) !important;
+    padding: 0 !important;
+    min-width: 280px;
+  }
+  .custom-popup .leaflet-popup-tip { background: rgba(4,16,36,0.97) !important; }
+  .custom-popup .leaflet-popup-content { margin:0 !important; }
+  .popup-inner { padding:16px; }
+  .popup-header {
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:12px; padding-bottom:10px;
+    border-bottom:1px solid rgba(0,200,255,0.15);
+  }
+  .popup-site { font-size:22px; font-weight:700; color:var(--accent); font-family:'JetBrains Mono',monospace; }
+  .popup-class-badge {
+    padding:4px 12px; border-radius:20px; font-size:11px; font-weight:700;
+    letter-spacing:1px; text-transform:uppercase;
+  }
+  .popup-reason { font-size:10px; color:var(--muted); margin-bottom:12px; font-style:italic; line-height:1.5; }
+  .popup-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:10px; }
+  .popup-metric {
+    background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06);
+    border-radius:8px; padding:7px 9px;
+  }
+  .pm-label { font-size:9px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); }
+  .pm-val { font-size:14px; font-weight:700; margin-top:2px; font-family:'JetBrains Mono',monospace; }
+  .pm-unit { font-size:9px; color:var(--muted); }
+  .popup-qualitative { margin-top:4px; }
+  .pq-row { display:flex; align-items:center; justify-content:space-between; padding:4px 0; font-size:10px; }
+  .pq-row span:first-child { color:var(--muted); }
+  .pq-badge { padding:2px 8px; border-radius:10px; font-size:10px; font-weight:600; }
+  .toc-bar-wrap { margin-top:10px; }
+  .toc-bar-label { font-size:9px; color:var(--muted); margin-bottom:4px; display:flex; justify-content:space-between; }
+  .toc-bar-bg { height:6px; background:rgba(255,255,255,0.08); border-radius:3px; overflow:hidden; }
+  .toc-bar-fill { height:100%; border-radius:3px; transition:width 0.5s ease; }
+
+  /* ── LAYER TOGGLE ──────────────────────────────── */
+  #layer-toggle {
+    position:fixed; top:80px; left:50%; transform:translateX(-50%); z-index:1000;
+    display:flex; gap:6px;
+    background:var(--glass); border:1px solid var(--border);
+    border-radius:10px; padding:6px; backdrop-filter:blur(12px);
+  }
+  .lt-btn {
+    padding:5px 14px; border-radius:7px; border:1px solid transparent;
+    font-family:'Space Grotesk',sans-serif; font-size:11px; font-weight:600;
+    cursor:pointer; transition:all 0.2s; color:var(--muted); background:transparent;
+    letter-spacing:0.5px;
+  }
+  .lt-btn.active { background:rgba(0,200,255,0.15); border-color:var(--accent); color:var(--accent); }
+  .lt-btn:hover:not(.active) { color:var(--text); border-color:rgba(255,255,255,0.1); }
+
+  /* Loading */
+  #loader {
+    position:fixed; inset:0; z-index:9999;
+    background: var(--bg);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px;
+  }
+  .loader-title { font-size:14px; letter-spacing:4px; text-transform:uppercase; color:var(--accent); }
+  .loader-sub { font-size:11px; color:var(--muted); }
+  .loader-bar { width:200px; height:2px; background:rgba(255,255,255,0.1); border-radius:1px; overflow:hidden; }
+  .loader-fill { height:100%; background:linear-gradient(90deg, var(--accent), var(--accent2)); animation:load 1.2s ease-in-out; }
+  @keyframes load { from{width:0} to{width:100%} }
+</style>
+</head>
+<body>
+
+<div id="loader">
+  <div class="loader-title">🌊 EO Water Quality</div>
+  <div class="loader-bar"><div class="loader-fill"></div></div>
+  <div class="loader-sub">Day 2 — April 17, 2025</div>
+</div>
+
+<!-- HEADER -->
+<div id="header">
+  <div class="title-block">
+    <h1>Earth Observation · Water Quality Analysis</h1>
+    <h2>Nanyao River — DKU &amp; CISK Campus</h2>
+  </div>
+  <div style="display:flex;align-items:center;gap:16px;">
+    <div style="text-align:right;">
+      <div style="font-size:10px;color:var(--muted);letter-spacing:1px">COORDINATES</div>
+      <div style="font-size:11px;font-family:'JetBrains Mono',monospace;color:var(--text)">31.4172–31.4191°N · 120.8902–120.8907°E</div>
+    </div>
+    <div class="day-badge">
+      <div class="day-num">17</div>
+      <div class="day-date">APR 2025</div>
+    </div>
+  </div>
+</div>
+
+<!-- MAP -->
+<div id="map"></div>
+
+<!-- LAYER TOGGLE -->
+<div id="layer-toggle">
+  <button class="lt-btn active" onclick="setLayer('google-hybrid')">🛰 Satellite</button>
+  <button class="lt-btn" onclick="setLayer('google-street')">🗺 Street</button>
+  <button class="lt-btn" onclick="setLayer('topo')">⛰ Terrain</button>
+  <button class="lt-btn" onclick="toggleHeatmap()">🌡 TOC Heatmap</button>
+  <button class="lt-btn" onclick="toggleCircles()">⭕ Choropleth</button>
+</div>
+
+<!-- WEATHER PANEL -->
+<div id="weather-panel">
+  <div class="wp-section-title">☁ Meteorological Conditions</div>
+  <div class="wp-header">
+    <div class="wp-icon">☀️</div>
+    <div>
+      <div class="wp-cond">Sunny & Warm</div>
+      <div class="wp-temp">22°C</div>
+    </div>
+  </div>
+  <div class="wp-row"><span>Low / High</span><span>13° / 22°C</span></div>
+  <div class="wp-row"><span>Humidity</span><span>55%</span></div>
+  <div class="wp-row"><span>Wind</span><span>10 km/h</span></div>
+  <div class="wp-row"><span>UV Index</span><span>6 / 11</span></div>
+  <div class="wp-row"><span>Pressure</span><span>1018 hPa</span></div>
+  <div class="wp-row"><span>Visibility</span><span>20 km</span></div>
+  <div class="wp-note">💡 High solar radiation boosting DO via photosynthesis. Low wind = stratification risk.</div>
+</div>
+
+<!-- WATER BODY PANEL -->
+<div id="waterbody-panel">
+  <div class="wp-section-title">🌊 Water Body Profile</div>
+  <div class="wb-type">Urban River / DKU–CISK Campus Boundary</div>
+  <div class="wb-row"><div class="wb-label">Basin</div><div class="wb-val">Nanyao River, Kunshan, Jiangsu</div></div>
+  <div class="wb-row"><div class="wb-label">Flow regime</div><div class="wb-val">Low (stable base flow)</div></div>
+  <div class="wb-row"><div class="wb-label">Depth</div><div class="wb-val">1.2–2.5 m</div></div>
+  <div class="wb-row"><div class="wb-label">Substrate</div><div class="wb-val">Silty clay, moderate organic matter</div></div>
+  <div class="wb-row"><div class="wb-label">Land use</div><div class="wb-val">Mixed urban / residential / light industrial</div></div>
+  <div class="wb-eco">⚠ Warm sunny conditions favor algal growth</div>
+</div>
+
+<!-- LEGEND -->
+<div id="legend">
+  <div class="legend-title">Water Quality Classification</div>
+  <div class="legend-row">
+    <div class="legend-dot" style="background:#00B4D8;box-shadow:0 0 8px #00B4D8"></div>
+    <div><div class="legend-label">Good</div><div class="legend-sub">TDS&lt;150 ppm · TOC&lt;4 mg/L</div></div>
+  </div>
+  <div class="legend-row">
+    <div class="legend-dot" style="background:#FFB703;box-shadow:0 0 8px #FFB703"></div>
+    <div><div class="legend-label">Moderate</div><div class="legend-sub">TDS 150–300 · TOC 4–6 mg/L</div></div>
+  </div>
+  <div class="legend-row">
+    <div class="legend-dot" style="background:#E63946;box-shadow:0 0 8px #E63946"></div>
+    <div><div class="legend-label">Poor</div><div class="legend-sub">TDS&gt;300 ppm · TOC&gt;6 mg/L</div></div>
+  </div>
+  <div class="choropleth-bar">
+    <div class="legend-title">TOC Concentration (mg/L)</div>
+    <div class="cbar-gradient"></div>
+    <div class="cbar-labels"><span>3.0</span><span>4.5</span><span>6.0</span><span>7.5+</span></div>
+  </div>
+</div>
+
+<!-- STATS BAR -->
+<div id="stats-bar">
+  <div class="stat-item">
+    <div class="stat-val" id="stat-toc" style="color:#FFB703">—</div>
+    <div class="stat-label">Avg TOC mg/L</div>
+  </div>
+  <div class="stat-item">
+    <div class="stat-val" id="stat-do" style="color:#00B4D8">—</div>
+    <div class="stat-label">Avg DO mg/L</div>
+  </div>
+  <div class="stat-item">
+    <div class="stat-val" id="stat-ph" style="color:#7ee8fa">—</div>
+    <div class="stat-label">Avg pH</div>
+  </div>
+  <div class="stat-item">
+    <div class="stat-val" id="stat-tds" style="color:#a78bfa">—</div>
+    <div class="stat-label">Avg TDS ppm</div>
+  </div>
+</div>
+
+<script>
+const SITES = [
+        {
+            id: 1,
+            lat: 31.4191,
+            lon: 120.8902,
+            ph: 7.8,
+            tds: 232,
+            tds_gl: 0.331,
+            do_val: 7.11,
+            do_label: "Well oxygenated",
+            do_color: "#34d399",
+            ph_label: "Neutral–Alkaline ✓",
+            ph_color: "#34d399",
+            spc: 0.509,
+            temp: 19.1,
+            cod: 4.12,
+            toc: 5.86,
+            uv275: 0.059,
+            wclass: "Moderate",
+            reason: "DO improved vs Day 1, TOC still elevated",
+            color: "#FFB703",
+            glow: "rgba(255,183,3,0.5)",
+            toc_color: "rgb(251,79,0)"
+        },
+        {
+            id: 2,
+            lat: 31.4185,
+            lon: 120.8904,
+            ph: 8.15,
+            tds: 241,
+            tds_gl: 0.3248,
+            do_val: 8.52,
+            do_label: "Well oxygenated",
+            do_color: "#34d399",
+            ph_label: "Neutral–Alkaline ✓",
+            ph_color: "#34d399",
+            spc: 0.5,
+            temp: 19.2,
+            cod: 4.02,
+            toc: 5.69,
+            uv275: 0.057,
+            wclass: "Moderate",
+            reason: "High DO from photosynthesis, alkaline pH",
+            color: "#FFB703",
+            glow: "rgba(255,183,3,0.5)",
+            toc_color: "rgb(246,90,0)"
+        },
+        {
+            id: 3,
+            lat: 31.4182,
+            lon: 120.8904,
+            ph: 8.12,
+            tds: 227,
+            tds_gl: 0.3242,
+            do_val: 8.21,
+            do_label: "Well oxygenated",
+            do_color: "#34d399",
+            ph_label: "Neutral–Alkaline ✓",
+            ph_color: "#34d399",
+            spc: 0.4988,
+            temp: 19.2,
+            cod: 4.1,
+            toc: 5.82,
+            uv275: 0.058,
+            wclass: "Moderate",
+            reason: "Consistent with algal activity",
+            color: "#FFB703",
+            glow: "rgba(255,183,3,0.5)",
+            toc_color: "rgb(250,81,0)"
+        },
+        {
+            id: 4,
+            lat: 31.4176,
+            lon: 120.8906,
+            ph: 8.14,
+            tds: 174,
+            tds_gl: 0.3237,
+            do_val: 8.27,
+            do_label: "Well oxygenated",
+            do_color: "#34d399",
+            ph_label: "Neutral–Alkaline ✓",
+            ph_color: "#34d399",
+            spc: 0.498,
+            temp: 19.2,
+            cod: 2.85,
+            toc: 3.93,
+            uv275: 0.039,
+            wclass: "Moderate",
+            reason: "Best water quality on transect — lowest TOC & TDS",
+            color: "#FFB703",
+            glow: "rgba(255,183,3,0.5)",
+            toc_color: "rgb(237,200,13)"
+        },
+        {
+            id: 5,
+            lat: 31.4172,
+            lon: 120.8907,
+            ph: 7.78,
+            tds: 236,
+            tds_gl: 0.3218,
+            do_val: 5.03,
+            do_label: "Acceptable",
+            do_color: "#fbbf24",
+            ph_label: "Neutral–Alkaline ✓",
+            ph_color: "#34d399",
+            spc: 0.495,
+            temp: 18.7,
+            cod: 4.06,
+            toc: 5.75,
+            uv275: 0.058,
+            wclass: "Moderate",
+            reason: "DO drop at endpoint, slight pH decrease",
+            color: "#FFB703",
+            glow: "rgba(255,183,3,0.5)",
+            toc_color: "rgb(248,86,0)"
+        }];
+const IDW_PTS = [{"lat": 31.4191, "lon": 120.8902, "val": 5.86}, {"lat": 31.4185, "lon": 120.8904, "val": 5.69}, {"lat": 31.4182, "lon": 120.8904, "val": 5.82}, {"lat": 31.4176, "lon": 120.8906, "val": 3.93}, {"lat": 31.4172, "lon": 120.8907, "val": 5.75}];
+const MIN_TOC = 3.93;
+const MAX_TOC = 5.86;
+
+// ── MAP INIT ──────────────────────────────────────────────────────────────
+const map = L.map('map', {
+  center: [31.41812, 120.89046],
+  zoom: 17,
+  zoomControl: false
+});
+
+L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+// ── TILE LAYERS ───────────────────────────────────────────────────────────
+const layers = {
+  'google-hybrid': L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+    attribution:'© Google', maxZoom:21, maxNativeZoom:21
+  }),
+  'google-street': L.tileLayer('https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+    attribution:'© Google', maxZoom:21
+  }),
+  'topo': L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+    attribution:'© OpenTopoMap', maxZoom:17
+  })
+};
+layers['google-hybrid'].addTo(map);
+let activeLayer = 'google-hybrid';
+
+function setLayer(name) {
+  map.removeLayer(layers[activeLayer]);
+  layers[name].addTo(map);
+  activeLayer = name;
+  document.querySelectorAll('.lt-btn').forEach((b,i) => {
+    if(i < 3) b.classList.toggle('active', ['google-hybrid','google-street','topo'][i] === name);
+  });
+}
+
+// ── IDW HEATMAP CANVAS LAYER ──────────────────────────────────────────────
+let heatmapVisible = false;
+let heatCanvas = null;
+
+function tocToRGBA(toc, alpha) {
+  let r,g,b;
+  if(toc <= 4.0) {
+    const t = Math.max(0,(toc-3)/1);
+    r=Math.round(t*255); g=200; b=Math.round(200*(1-t));
+  } else if(toc <= 6.0) {
+    const t=(toc-4)/2;
+    r=Math.round(200+55*t); g=Math.round(200-130*t); b=0;
+  } else {
+    const t=Math.min((toc-6)/2,1);
+    r=255; g=Math.round(70*(1-t)); b=0;
+  }
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function idwValue(lat, lon) {
+  let num=0, den=0;
+  IDW_PTS.forEach(p => {
+    const d = Math.sqrt((lat-p.lat)**2+(lon-p.lon)**2);
+    if(d < 1e-10) { num=p.val; den=1; return; }
+    const w = 1/(d**2);
+    num+=w*p.val; den+=w;
+  });
+  return num/den;
+}
+
+function drawHeatmap() {
+  if(heatCanvas) map.removeLayer(heatCanvas);
+  const bounds = map.getBounds();
+  const size = map.getSize();
+  const step = 4; // pixel resolution
+  const canvas = document.createElement('canvas');
+  canvas.width = size.x; canvas.height = size.y;
+  const ctx = canvas.getContext('2d');
+  for(let px=0; px<size.x; px+=step) {
+    for(let py=0; py<size.y; py+=step) {
+      const pt = map.containerPointToLatLng([px,py]);
+      const val = idwValue(pt.lat, pt.lng);
+      ctx.fillStyle = tocToRGBA(val, 0.55);
+      ctx.fillRect(px, py, step, step);
+    }
+  }
+  const url = canvas.toDataURL();
+  heatCanvas = L.imageOverlay(url, bounds, {opacity:1, interactive:false}).addTo(map);
+}
+
+function toggleHeatmap() {
+  heatmapVisible = !heatmapVisible;
+  const btn = document.querySelectorAll('.lt-btn')[3];
+  btn.classList.toggle('active', heatmapVisible);
+  if(heatmapVisible) drawHeatmap();
+  else if(heatCanvas) { map.removeLayer(heatCanvas); heatCanvas=null; }
+}
+
+// ── TRANSECT LINE ─────────────────────────────────────────────────────────
+const transectCoords = SITES.map(s => [s.lat, s.lon]);
+L.polyline(transectCoords, {
+  color:'rgba(0,200,255,0.6)', weight:2, dashArray:'6 4',
+}).addTo(map);
+
+// ── CHOROPLETH CIRCLES ────────────────────────────────────────────────────
+let circleLayer = L.layerGroup().addTo(map);
+
+function buildCircles() {
+  SITES.forEach(s => {
+    // Outer glow ring
+    L.circle([s.lat, s.lon], {
+      radius: 28,
+      color: s.color, weight:0,
+      fillColor: s.color, fillOpacity: 0.12
+    }).addTo(circleLayer);
+    // TOC choropleth fill
+    L.circle([s.lat, s.lon], {
+      radius: 18,
+      color: s.toc_color, weight: 2,
+      fillColor: s.toc_color, fillOpacity: 0.75
+    }).addTo(circleLayer);
+  });
+}
+buildCircles();
+
+let circlesVisible = true;
+function toggleCircles() {
+  circlesVisible = !circlesVisible;
+  document.querySelectorAll('.lt-btn')[4].classList.toggle('active', circlesVisible);
+  if(circlesVisible) circleLayer.addTo(map);
+  else map.removeLayer(circleLayer);
+}
+
+// ── MARKERS ───────────────────────────────────────────────────────────────
+SITES.forEach(s => {
+  const icon = L.divIcon({
+    className:'',
+    html:`<div style="
+      width:34px;height:34px;border-radius:50%;
+      background:${s.color};
+      border:3px solid rgba(255,255,255,0.9);
+      display:flex;align-items:center;justify-content:center;
+      font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:700;color:#000;
+      box-shadow:0 0 20px ${s.glow},0 0 6px rgba(0,0,0,0.5);
+      cursor:pointer;
+    ">${s.id}</div>`,
+    iconSize:[34,34], iconAnchor:[17,17]
+  });
+
+  const tocPct = Math.min(((s.toc - MIN_TOC)/(MAX_TOC - MIN_TOC + 0.01))*100, 100);
+  const popup = L.popup({className:'custom-popup', maxWidth:320, closeButton:true}).setContent(`
+    <div class="popup-inner">
+      <div class="popup-header">
+        <div>
+          <div style="font-size:10px;color:#7fa8c4;letter-spacing:2px;text-transform:uppercase">Sampling Point</div>
+          <div class="popup-site">SITE ${s.id}</div>
+        </div>
+        <div class="popup-class-badge" style="background:${s.color}22;border:1px solid ${s.color};color:${s.color}">${s.wclass.toUpperCase()}</div>
+      </div>
+      <div class="popup-reason">📋 ${s.reason}</div>
+
+      <div class="popup-grid">
+        <div class="popup-metric">
+          <div class="pm-label">pH</div>
+          <div class="pm-val" style="color:${s.ph_color}">${s.ph.toFixed(2)}</div>
+          <div class="pm-unit">${s.ph_label}</div>
+        </div>
+        <div class="popup-metric">
+          <div class="pm-label">TOC</div>
+          <div class="pm-val" style="color:${s.toc_color}">${s.toc.toFixed(2)}</div>
+          <div class="pm-unit">mg/L — organic carbon</div>
+        </div>
+        <div class="popup-metric">
+          <div class="pm-label">DO</div>
+          <div class="pm-val" style="color:${s.do_color}">${s.do_val.toFixed(2)}</div>
+          <div class="pm-unit">mg/L</div>
+        </div>
+        <div class="popup-metric">
+          <div class="pm-label">TDS</div>
+          <div class="pm-val" style="color:#a78bfa">${s.tds}</div>
+          <div class="pm-unit">ppm (${s.tds_gl.toFixed(4)} g/L)</div>
+        </div>
+        <div class="popup-metric">
+          <div class="pm-label">COD</div>
+          <div class="pm-val">${s.cod.toFixed(2)}</div>
+          <div class="pm-unit">mg/L</div>
+        </div>
+        <div class="popup-metric">
+          <div class="pm-label">UV275</div>
+          <div class="pm-val">${s.uv275.toFixed(3)}</div>
+          <div class="pm-unit">au/cm</div>
+        </div>
+      </div>
+
+      <div class="popup-qualitative">
+        <div class="pq-row">
+          <span>DO Status</span>
+          <span class="pq-badge" style="background:${s.do_color}22;border:1px solid ${s.do_color};color:${s.do_color}">${s.do_label}</span>
+        </div>
+        <div class="pq-row">
+          <span>pH Character</span>
+          <span class="pq-badge" style="background:${s.ph_color}22;border:1px solid ${s.ph_color};color:${s.ph_color}">${s.ph_label}</span>
+        </div>
+        <div class="pq-row">
+          <span>SPC</span>
+          <span style="color:#7fa8c4;font-family:'JetBrains Mono',monospace;font-size:11px">${s.spc.toFixed(4)} mS/cm</span>
+        </div>
+        <div class="pq-row">
+          <span>Temp</span>
+          <span style="color:#7fa8c4;font-family:'JetBrains Mono',monospace;font-size:11px">${s.temp}°C</span>
+        </div>
+      </div>
+
+      <div class="toc-bar-wrap">
+        <div class="toc-bar-label">
+          <span>TOC Load on transect</span>
+          <span style="font-family:'JetBrains Mono',monospace">${s.toc.toFixed(2)} mg/L</span>
+        </div>
+        <div class="toc-bar-bg">
+          <div class="toc-bar-fill" style="width:${tocPct}%;background:${s.toc_color}"></div>
+        </div>
+      </div>
+    </div>
+  `);
+
+  L.marker([s.lat, s.lon], {icon}).bindPopup(popup).addTo(map);
+});
+
+// ── STATS BAR ─────────────────────────────────────────────────────────────
+const avg = arr => (arr.reduce((a,b)=>a+b,0)/arr.length).toFixed(2);
+document.getElementById('stat-toc').textContent  = avg(SITES.map(s=>s.toc));
+document.getElementById('stat-do').textContent   = avg(SITES.map(s=>s.do_val));
+document.getElementById('stat-ph').textContent   = avg(SITES.map(s=>s.ph));
+document.getElementById('stat-tds').textContent  = Math.round(SITES.map(s=>s.tds).reduce((a,b)=>a+b,0)/SITES.length);
+
+// ── REMOVE LOADER ─────────────────────────────────────────────────────────
+setTimeout(() => document.getElementById('loader').style.display='none', 900);
+</script>
+</body>
+</html>
