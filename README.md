@@ -3,10 +3,11 @@
 A short field-monitoring project on the Nanyao urban river running through the Duke Kunshan
 University campus (Kunshan, China), done for a campus environmental-science course.
 
-I took water-quality measurements at fixed points along the river on three dates (April 14,
-17 and 19) and mapped each survey as an interactive site map (`april14th_river_study_map.html`,
-`april17th_river_study_map.html`, `april19th_river_study_map.html` — open any of them directly
-in a browser).
+At five fixed GPS-tagged sites along the river I measured pH, dissolved oxygen, specific
+conductivity, temperature, COD, TOC, TDS and UV275 absorbance (a proxy for dissolved organic
+matter) on three dates (April 14, 17 and 19) and mapped each survey as an interactive site map
+(`april14th_river_study_map.html`, `april17th_river_study_map.html`,
+`april19th_river_study_map.html` — open any of them directly in a browser).
 
 The raw measurements are in `Water Quality Measurement.csv` / `.xlsx`.
 
